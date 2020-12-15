@@ -19,7 +19,7 @@ import logging
 import sys
 
 def is_device_we_want(device):
-    return device.idVendor == 0xb05 and device.idProduct in [0x1872] #18f3 or 0x1872
+    return device.idVendor == 0xb05 and device.idProduct in [0x18f3] #18f3 or 0x1872
 """
 [
         0x1c0a,  # RM650i
@@ -39,18 +39,21 @@ if dev is None:
     raise ValueError('No device found')
 
 # grab the device from the kernel's claws
-ifaceid = 0
+ifaceid = 2
 if dev.is_kernel_driver_active(ifaceid):
     dev.detach_kernel_driver(ifaceid)
     usb.util.claim_interface(dev, ifaceid)
 
 try:
-    cfg = dev.get_active_configuration()
-    (reader, writer) = cfg[(0,0)].endpoints()
+    reader = None
+    #cfg = dev.get_active_configuration()
+    #print(cfg[1,0].endpoints())
+    #writer = cfg[(1,0)].endpoints()[0]
     # data is an array of ints
     def write(data):
         padding = [0x0]*(65 - len(data))
-        writer.write(data + padding, timeout=200)
+        #writer.write(data + padding, timeout=200)
+        dev.ctrl_transfer(0x21, 9, 0x02ec, wIndex=2, data_or_wLength=data+padding)
 
     def read():
         if reader is not None:
@@ -60,6 +63,9 @@ try:
             #return bytearray(data)
 
     # send user-provided length+opcode
+
+
+
     write([int(b, 16) for b in sys.argv[1:]])
 
     # get data back and print in it various encoding

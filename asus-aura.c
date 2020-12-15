@@ -26,7 +26,7 @@
 #define SECONDS_PER_HOUR	(60 * 60)
 #define SECONDS_PER_DAY		(SECONDS_PER_HOUR * 24)
 
-#define AURA_ADDRESSABLE_CONTROL_MODE_EFFECT	0x3B    /* Effect control mode */
+#define AURA_ADDRESSABLE_CONTROL_MODE_EFFECT	0x35    /* Effect control mode */
 #define AURA_START_FRAME 0xEC
 #define AURA_GET_FW_STR 0x82
 #define AURA_GET_CONFIG_TABLE 0xb0
@@ -39,6 +39,7 @@ struct aura_data {
 		struct completion wait_completion;
 		struct mutex lock; /* for locking access to cmd_buffer */
 		u8 *cmd_buffer;
+		u8 config_table[36];
 };
 
 static int aura_usb_cmd(struct aura_data *priv, u8 *in, int in_len, u8 *reply, int reply_len)
@@ -51,7 +52,8 @@ static int aura_usb_cmd(struct aura_data *priv, u8 *in, int in_len, u8 *reply, i
 
 	reinit_completion(&priv->wait_completion);
 
-	ret = hid_hw_output_report(priv->hdev, priv->cmd_buffer, CMD_BUFFER_SIZE);
+	ret = hid_hw_raw_request(priv->hdev, priv->cmd_buffer[0], priv->cmd_buffer,
+						  CMD_BUFFER_SIZE, HID_OUTPUT_REPORT, HID_REQ_SET_REPORT);
 	if (ret < 0)
 		return ret;
 
@@ -73,29 +75,6 @@ static int aura_usb_cmd(struct aura_data *priv, u8 *in, int in_len, u8 *reply, i
 
 #ifdef CONFIG_DEBUG_FS
 
-//static void print_uptime(struct seq_file *seqf, u8 cmd)
-//{
-//	struct aura_data *priv = seqf->private;
-//	long val;
-//	int ret;
-//
-//	ret = aura_get_value(priv, cmd, 0, &val);
-//	if (ret < 0) {
-//		seq_puts(seqf, "N/A\n");
-//		return;
-//	}
-//
-//	if (val > SECONDS_PER_DAY) {
-//		seq_printf(seqf, "%ld day(s), %02ld:%02ld:%02ld\n", val / SECONDS_PER_DAY,
-//				   val % SECONDS_PER_DAY / SECONDS_PER_HOUR, val % SECONDS_PER_HOUR / 60,
-//				   val % 60);
-//		return;
-//	}
-//
-//	seq_printf(seqf, "%02ld:%02ld:%02ld\n", val % SECONDS_PER_DAY / SECONDS_PER_HOUR,
-//			   val % SECONDS_PER_HOUR / 60, val % 60);
-//}
-
 static int firmware_show(struct seq_file *seqf, void *unused)
 {
 	struct aura_data *priv = seqf->private;
@@ -110,6 +89,29 @@ static int firmware_show(struct seq_file *seqf, void *unused)
 }
 DEFINE_SHOW_ATTRIBUTE(firmware);
 
+static int read_cfg_table(struct aura_data *priv) {
+	int ret = 0;
+	u8 cmd[] = {AURA_START_FRAME, AURA_GET_CONFIG_TABLE};
+	ret = aura_usb_cmd(priv, cmd, 2, priv->config_table, 36);
+	return ret;
+}
+
+static int cfg_table_show(struct seq_file *seqf, void *unused)
+{
+	struct aura_data *priv = seqf->private;
+	int i;
+	int ret = read_cfg_table(priv);
+	if(ret >= 0) {
+		for(i = 1; i <= 36; i++) {
+			seq_printf(seqf, "%02x ", priv->config_table[i-1] & 0xff);
+			if (i % 6 == 0) {
+				seq_printf(seqf, "\n");
+			}
+		}
+	}
+	return ret;
+}
+DEFINE_SHOW_ATTRIBUTE(cfg_table);
 
 static void aura_debugfs_init(struct aura_data *priv)
 {
@@ -119,6 +121,7 @@ static void aura_debugfs_init(struct aura_data *priv)
 
 	priv->debugfs = debugfs_create_dir(name, NULL);
 	debugfs_create_file("firmware", 0444, priv->debugfs, priv, &firmware_fops);
+	debugfs_create_file("config_table", 0444, priv->debugfs, priv, &cfg_table_fops);
 }
 
 #else
@@ -199,8 +202,8 @@ static int aura_raw_event(struct hid_device *hdev, struct hid_report *report, u8
 }
 
 static const struct hid_device_id aura_idtable[] = {
-	{ HID_USB_DEVICE(0x0b05, 0x1872) }, /* Aura USB controller on Strix TRX-40, fw AULA1-S072-0208 */
-	//{ HID_USB_DEVICE(0x0b05, 0x18f3) }, /* Aura USB controller on Strix TRX-40 */
+	{ HID_USB_DEVICE(0x0b05, 0x1872) }, /* Aura Addressable USB controller on Strix TRX-40, fw AULA1-S072-0208 */
+	{ HID_USB_DEVICE(0x0b05, 0x18f3) }, /* Aura Motherboard USB controller on Strix TRX-40 */
 	{ },
 };
 MODULE_DEVICE_TABLE(hid, aura_idtable);

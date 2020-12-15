@@ -1,0 +1,9 @@
+#off
+[root@jackdesk asus-aura-module]# ./mobo.py ec 35 00 00 00 00
+[root@jackdesk asus-aura-module]# ./mobo.py ec 36 00 ff
+[root@jackdesk asus-aura-module]# ./mobo.py ec 3f 55
+#rainbow:
+[root@jackdesk asus-aura-module]# ./mobo.py ec 35 00 00 00 05
+[root@jackdesk asus-aura-module]# ./mobo.py ec 36 00 ff
+[root@jackdesk asus-aura-module]# ./mobo.py ec 3f 55
+
